@@ -206,6 +206,133 @@ class CartPendulum(BaseSystem):
         )
 
     def constraints(self, x, u):
-        # h1 = x[2]
+        r"""
+        Defines the equality constraints for the cart-pendulum system.
+
+        This method specifies conditions that must be satisfied during
+        the trajectory optimization process. In this case, the constraint
+        ensures that the pendulum reaches or maintains the upright position.
+        """
         h2 = x[1] - cs.pi
         return cs.vertcat(h2)
+
+
+@dataclass
+class UavParameters:
+    m: float
+    """Mass of the UAV"""
+
+    I: float
+    """Moment of inertia of the UAV"""
+
+    fr_x: float
+    """Friction coefficient in the x-direction"""
+
+    fr_z: float
+    """Friction coefficient in the z-direction"""
+
+    fr_theta: float
+    """Friction coefficient for rotational motion"""
+
+    width: float
+    """Width of the UAV"""
+
+
+class Uav(BaseSystem):
+    def __init__(self):
+        super().__init__("uav", 6, 2)
+        self.p = UavParameters(m=1.0, I=0.01, fr_x=0.01, fr_z=0.01, fr_theta=0.01, width=0.2)
+
+        self.f1 = lambda x, u: x[3]
+        self.f2 = lambda x, u: x[4]
+        self.f3 = lambda x, u: x[5]
+
+        self.f4 = lambda x, u: (-0 * self.p.fr_x * x[3] + (u[0] + u[1]) * cs.sin(x[2])) / self.p.m
+        """The horizontal acceleration of the UAV influenced by the total thrust, the orientation of the UAV and the friction in the horizontal direction."""
+
+        self.f5 = lambda x, u: (-0 * self.p.fr_z * x[4] - self.p.m * self.g + (u[0] + u[1]) * cs.cos(x[2])) / self.p.m
+        """The vertical acceleration of the UAV influenced by the thrust in the verstical direction, gravity and the friction in the vertical direction."""
+
+        self.f6 = lambda x, u: (-0 * self.p.fr_theta * x[5] + (self.p.width / 2) * (u[1] - u[0])) / self.p.I
+        """The angular acceleration of the UAV influenced by the difference in thrust on the two rotors, the width of the UAV, that acts as lever arm and the rotation friction. Finally the moment of inertia is used to normalized the torque into angular acceleration."""
+
+        self.f = lambda x, u: cs.vertcat(
+            self.f1(x, u), self.f2(x, u), self.f3(x, u), self.f4(x, u), self.f5(x, u), self.f6(x, u)
+        )
+        """State space dynamics of the entire system."""
+
+    def draw_frame(self, ax, i, x, u, alpha=1.0, x_pred=None):
+        ax.axis((-2, 2, -2, 2))
+        ax.set_aspect("equal")
+
+        uav_length = 0.5
+        uav_width = self.p.width
+        x_pos = x[0, i]
+        z_pos = x[1, i]
+        theta = x[2, i]
+
+        body_x1 = x_pos + (uav_length * math.cos(theta)) / 2 - (uav_width * math.sin(theta)) / 2
+        body_z1 = z_pos - (uav_length * math.sin(theta)) / 2 - (uav_width * math.cos(theta)) / 2
+        body_x2 = x_pos - (uav_length * math.cos(theta)) / 2 - (uav_width * math.sin(theta)) / 2
+        body_z2 = z_pos + (uav_length * math.sin(theta)) / 2 - (uav_width * math.cos(theta)) / 2
+        body_x3 = x_pos - (uav_length * math.cos(theta)) / 2 + (uav_width * math.sin(theta)) / 2
+        body_z3 = z_pos + (uav_length * math.sin(theta)) / 2 + (uav_width * math.cos(theta)) / 2
+        body_x4 = x_pos + (uav_length * math.cos(theta)) / 2 + (uav_width * math.sin(theta)) / 2
+        body_z4 = z_pos - (uav_length * math.sin(theta)) / 2 + (uav_width * math.cos(theta)) / 2
+
+        ax.plot(
+            [body_x1, body_x2, body_x3, body_x4, body_x1],
+            [body_z1, body_z2, body_z3, body_z4, body_z1],
+            color="blue",
+            lw=2,
+            alpha=alpha,
+        )
+
+        ax.add_patch(plt.Circle((x_pos, z_pos), uav_length / 10, color="green", alpha=alpha))  # type: ignore
+
+        if x_pred is not None:
+            x_p = x_pred[i]
+            uav_x_pred = x_p[0, :]
+            uav_y_pred = x_p[1, :]
+            ax.plot(uav_x_pred, uav_y_pred, color="orange", alpha=alpha)
+
+        thrust_scale = 0.05
+        thrust_length_left = max(u[1, i], 0.001) / self.p.m * thrust_scale
+        thrust_length_right = max(u[0, i], 0.001) / self.p.m * thrust_scale
+
+        left_x = x_pos - (uav_width / 2) * math.cos(theta)
+        left_z = z_pos + (uav_width / 2) * math.sin(theta)
+        right_x = x_pos + (uav_width / 2) * math.cos(theta)
+        right_z = z_pos - (uav_width / 2) * math.sin(theta)
+
+        thrust_x_left = -thrust_length_left * math.sin(theta)
+        thrust_z_left = -thrust_length_left * math.cos(theta)
+        thrust_x_right = -thrust_length_right * math.sin(theta)
+        thrust_z_right = -thrust_length_right * math.cos(theta)
+
+        ax.arrow(
+            left_x, left_z, thrust_x_left, thrust_z_left, color="red", head_width=0.05, head_length=0.05, alpha=alpha
+        )
+        ax.arrow(
+            right_x,
+            right_z,
+            thrust_x_right,
+            thrust_z_right,
+            color="red",
+            head_width=0.05,
+            head_length=0.05,
+            alpha=alpha,
+        )
+
+    def constraints(self, x, u):
+        """
+        Defines the equality constraints for the UAV model.
+
+        This function specifies that the UAV must land at position (0, 0, 0),
+        meaning its x-position, z-position, and orientation should be 0.
+        """
+
+        h1 = x[0]  # Enforce x-position to be 0
+        h2 = x[1]  # Enforce z-position to be 0
+        h3 = x[2]  # Enforce orientation to be 0
+        return cs.vertcat(h1, h2, h3)
