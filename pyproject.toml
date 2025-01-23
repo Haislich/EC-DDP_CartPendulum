@@ -1,2 +1,41 @@
+[project]
+name = "ec-ddp"
+version = "0.1.0"
+description = "Equality Constrained Differential Dynamic Programming (EC-DDP). A reimplementation of EC-DDP for trajectory optimization with equality constraints, based on the Augmented Lagrangian approach proposed by El Kazdadi et al. (ICRA 2021). "
+readme = "README.md"
+authors = [
+    { name = "Valerio Belli", email = "valeriobelli26@gmail.com"},
+    { name = "Jose Manuel", email = "josedlv936@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "casadi>=3.6.7",
+    "matplotlib>=3.10.0",
+    "numpy>=2.2.2",
+    "proxsuite>=0.7.0",
+    "scipy>=1.15.1",
+]
+
+[project.scripts]
+ec-ddp = "ec_ddp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "black>=24.10.0",
+    "pylint>=3.3.3",
+]
+
+[tool.ruff.lint]
+# select = ["E", "F"]
+ignore = ["E741"]
+
 [tool.black]
 line-length=119
+
+[[tool.mypy.overrides]]
+module = ["casadi.*"]
+ignore_missing_imports = true

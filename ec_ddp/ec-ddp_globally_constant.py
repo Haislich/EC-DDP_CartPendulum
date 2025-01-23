@@ -1,8 +1,10 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import casadi as cs
 import time
-import model
+
+import casadi as cs
+import matplotlib.pyplot as plt
+import numpy as np
+
+import ec_ddp.model as model
 
 # initialization
 mod = model.CartPendulum()
@@ -15,12 +17,7 @@ Q = np.eye(n) * 0
 R = np.eye(m) * 0.01
 Q_ter = np.eye(n) * 10000
 
-if mod.name == "cart_pendulum":
-    x_ter = np.array((0, cs.pi, 0, 0))
-elif mod.name == "pendubot":
-    x_ter = np.array((cs.pi, 0, 0, 0))
-elif mod.name == "uav":
-    x_ter = np.array((1, 1, 0, 0, 0, 0))
+x_ter = np.array((0, cs.pi, 0, 0))
 
 
 # symbolic variables
@@ -32,7 +29,6 @@ U = opt.variable(m)
 h_ = lambda x, u: mod.constraints(x, u)
 h_dim = mod.constraints(X, U).shape[0]
 h = cs.Function("h", [X, U], [mod.constraints(X, U)], {"post_expand": True})
-
 
 lambdas = opt.variable(h_dim)
 mu = opt.parameter()
@@ -60,10 +56,6 @@ Lux_lag = cs.Function(
 Luu_lag = cs.Function("Luu", [X, U, lambdas, mu], [cs.jacobian(Lu_lag(X, U, lambdas, mu), U)], {"post_expand": True})
 L_terx = cs.Function("L_terx", [X], [cs.jacobian(L_ter(X), X)], {"post_expand": True})
 L_terxx = cs.Function("L_terxx", [X], [cs.jacobian(L_terx(X), X)], {"post_expand": True})
-
-
-print(Lx_lag(X, U, lambdas, mu).shape)
-print(Lxx_lag(X, U, lambdas, mu).shape)
 
 
 # dynamics

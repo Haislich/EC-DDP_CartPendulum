@@ -1,7 +1,9 @@
 # Equality Constrained Differential Dynamic Programming (EC-DDP)
-A reimplementation of **Equality Constrained Differential Dynamic Programming (EC-DDP)** for trajectory optimization with equality constraints, based on the **Augmented Lagrangian** approach proposed by **El Kazdadi et al. (ICRA 2021)**.
+
+A reimplementation of [**Equality Constrained Differential Dynamic Programming (EC-DDP)**](https://inria.hal.science/hal-03184203/file/equality-constrained-ddp.pdf) for trajectory optimization with equality constraints, based on the **Augmented Lagrangian** approach proposed by **El Kazdadi et al. (ICRA 2021)**.
 
 ## Features
+
 - **DDP with equality constraints** using the **Augmented Lagrangian** formulation.
 - **Two strategies for handling Lagrange multipliers**:
   - **Globally constant multipliers** (classic augmented Lagrangian method).
@@ -10,12 +12,15 @@ A reimplementation of **Equality Constrained Differential Dynamic Programming (E
 - **Efficient implementation** with optimized backward and forward passes.
 
 ## Repository Structure
+
 - `ec_ddp.py` → Core implementation of **EC-DDP** with both multiplier strategies.
 - `examples/` → Sample use cases for **cartpole** and **robotic arms**.
 - `tests/` → Unit tests to validate algorithm correctness.
 
 ## Installation
+
 Clone the repository and install dependencies:
+
 ```bash
 git clone https://github.com/valerio98-lab/EC-DDP_CartPendulum.git
 cd EC-DDP_CartPendulum
