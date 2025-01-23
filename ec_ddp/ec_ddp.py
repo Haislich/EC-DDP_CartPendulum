@@ -113,13 +113,15 @@ HXX = cs.Function("HXX", [X, U], [cs.jacobian(HX(X, U), X)], {"post_expand": Tru
 
 
 def equality_constrained_ddp(
-    total_time: int = 0,
-    eta: int = 20,
-    omega: int = 20,
+    eta: float = 20.0,
+    omega: float = 20.0,
     beta: float = 0.5,
+    alpha: float = 0.1,
+    k_mu=10,
     etha_threshold=10,
     omega_threshold: int = 10,
     max_iterations: int = 20,
+    max_line_search_iters=10,
 ):
     x = np.zeros((N, N_TIMESTEPS))
     """State trajectory"""
@@ -128,7 +130,7 @@ def equality_constrained_ddp(
     mu_zero = 1.0
     lambda_zero = np.zeros(H_DIM)
 
-    # Forward pass: We propagate the state trajectory by using the discretized dynamics.
+    # Initial Forward pass: We propagate the state trajectory by using the discretized dynamics to get an initial guess.
     cost = 0
     for timestep in range(N_TIMESTEPS):
         x[:, timestep + 1] = np.array(F_DISCRETE(x[:, timestep], u[:, timestep])).flatten()
@@ -136,8 +138,6 @@ def equality_constrained_ddp(
         cost += L_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
     # Adn finally we add the terminal cost at the end of the trajectory
     cost += L_TERMINAL(x[:, N_TIMESTEPS])  # type: ignore
-
-    # Backpropagation:
 
     V = np.zeros(N_TIMESTEPS + 1)
     """Value function"""
@@ -147,9 +147,13 @@ def equality_constrained_ddp(
     k = [np.zeros((M, 1))] * (N + 1)
     K = [np.zeros((M, N))] * (N + 1)
 
+    total_time = 0
+
     for iteration in range(max_iterations):
         if eta > etha_threshold or omega > omega_threshold:
             break
+        # Backward pass:
+
         backward_pass_start_time = time.time()
         # For Equation 4, the value at the final sequence element is the terminal value
         V[N] = L_TERMINAL(x[:, N])
@@ -230,6 +234,50 @@ def equality_constrained_ddp(
 
             # Value function approximation
             # TODO: Understand betyter Valerio's code
+            # Equation 11a
             V[timestep] = q - 0.5 * np.array(cs.evalf(k[timestep].T @ QUU @ k[timestep])).flatten()[0]
+            # Equation 11b
             VX[:, timestep] = np.array(QX - k[timestep].T @ QUU @ K[timestep]).flatten()
+            # Equation 11c
             VXX[:, :, timestep] = QXX - K[timestep].T @ QUU @ K[timestep]
+        backward_pass_time = time.time() - backward_pass_start_time
+        backward_pass_time = round(backward_pass_time * 1000)
+        # Forward pass
+        forward_pass_start_time = time.time()
+        u_new = np.ones((M, N_TIMESTEPS))
+        x_new = np.zeros((N, N_TIMESTEPS))
+        x_new[:, 0] = x[:, 0]
+
+        for line_search_iter in range(max_line_search_iters):
+            new_cost = 0
+            # We propagate the state trajectory by using the discretized dynamics.
+            for timestep in range(N_TIMESTEPS):
+                x_new[:, timestep + 1] = np.array(F_DISCRETE(x[:, timestep], u[:, timestep])).flatten()
+                # Accumulate the running cost at each step
+                new_cost += L_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
+            # Adn finally we add the terminal cost at the end of the trajectory
+            new_cost += L_TERMINAL(x[:, N_TIMESTEPS])  # type: ignore
+
+            if new_cost < cost:
+                cost = new_cost
+                x = x_new
+                u = u_new
+                break
+            alpha /= 2.0
+        # TODO: Ask valerio where does this come from.
+        if np.linalg.norm(LX_LAGRANGIAN(x_new[:, N_TIMESTEPS - 1], u_new[:, N_TIMESTEPS - 1])) < omega:  # type:ignore
+            if np.linalg.norm(H(x_new[:, N_TIMESTEPS - 1], u_new[:, N_TIMESTEPS - 1])) < eta:  # type:ignore
+                lambda_zero += mu_zero * H(x_new[:, N - 1], u_new[:, N_TIMESTEPS - 1])  # type:ignore
+                eta /= mu_zero**beta
+                omega = omega // mu_zero
+            else:
+                mu_zero *= k_mu
+
+        forward_pass_time = time.time() - forward_pass_start_time
+        forward_pass_time = round(backward_pass_time * 1000)
+
+        total_time += backward_pass_time + forward_pass_time
+        print(
+            f"{iteration=},{backward_pass_time=},{forward_pass_time=}" + "||h(x, u)||:",
+            np.linalg.norm(H(x[:, :-1], u)),  # type: ignore
+        )
