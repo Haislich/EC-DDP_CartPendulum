@@ -47,7 +47,6 @@ class Solver:
         """Symbolic decision variable that represents the state of the system."""
         self.U = self.OPT.variable(self.m)
         """Symbolic decision variable that represents the control input."""
-
         self.h_dim = model.constraints(self.X, self.U).shape[0]
         self.LAMBDAS = self.OPT.variable(self.h_dim)
         """Lagrangian multipliers associated with the constraint."""
@@ -79,42 +78,42 @@ class Solver:
         self.L_LAGRANGIAN = cs.Function(
             "L_LAGRANGIAN",
             [self.X, self.U, self.LAMBDAS, self.MU],
-            [self.augmented_lagrangian_cost(self.X, self.U)],
+            [self.augmented_lagrangian_cost(self.X, self.U, self.LAMBDAS, self.MU)],
             {"post_expand": True},
         )
         """Symbolic function for the lagragian extended running cost."""
         self.LU_LAGRANGIAN = cs.Function(
             "LU_LAGRANGIAN",
             [self.X, self.U, self.LAMBDAS, self.MU],
-            [cs.jacobian(self.L_LAGRANGIAN(self.X, self.U), self.U)],
+            [cs.jacobian(self.L_LAGRANGIAN(self.X, self.U, self.LAMBDAS, self.MU), self.U)],
             {"post_expand": True},
         )
         """First order partial derivative of the lagrangian with respect to `u`"""
         self.LX_LAGRANGIAN = cs.Function(
             "LX_LAGRANGIAN",
             [self.X, self.U, self.LAMBDAS, self.MU],
-            [cs.jacobian(self.L_LAGRANGIAN(self.X, self.U), self.X)],
+            [cs.jacobian(self.L_LAGRANGIAN(self.X, self.U, self.LAMBDAS, self.MU), self.X)],
             {"post_expand": True},
         )
         """First order partial derivative of the lagrangian with respect to `x`"""
         self.LUU_LAGRANGIAN = cs.Function(
-            "LU_LAGRANGIAN",
+            "LUU_LAGRANGIAN",
             [self.X, self.U, self.LAMBDAS, self.MU],
-            [cs.jacobian(self.LU_LAGRANGIAN(self.X, self.U), self.U)],
+            [cs.jacobian(self.LU_LAGRANGIAN(self.X, self.U, self.LAMBDAS, self.MU), self.U)],
             {"post_expand": True},
         )
         """Second order partial derivative of the lagrangian with respect to `u`"""
         self.LUX_LAGRANGIAN = cs.Function(
-            "LX_LAGRANGIAN",
+            "LUX_LAGRANGIAN",
             [self.X, self.U, self.LAMBDAS, self.MU],
-            [cs.jacobian(self.LU_LAGRANGIAN(self.X, self.U), self.X)],
+            [cs.jacobian(self.LU_LAGRANGIAN(self.X, self.U, self.LAMBDAS, self.MU), self.X)],
             {"post_expand": True},
         )
         """Mixed partial derivative of the lagrangian with respect to `u` and `x`"""
         self.LXX_LAGRANGIAN = cs.Function(
-            "LX_LAGRANGIAN",
+            "LXX_LAGRANGIAN",
             [self.X, self.U, self.LAMBDAS, self.MU],
-            [cs.jacobian(self.LX_LAGRANGIAN(self.X, self.U), self.X)],
+            [cs.jacobian(self.LX_LAGRANGIAN(self.X, self.U, self.LAMBDAS, self.MU), self.X)],
             {"post_expand": True},
         )
         """Second order partial derivative of the lagrangian with respect to `x`"""
@@ -148,27 +147,27 @@ class Solver:
             {"post_expand": True},
         )
         """First order partial derivative of the discretized dynamics with respect to `x`"""
-        self.FUU_DISCRETE = cs.Function(
-            "FUU_DISCRETE",
-            [self.X, self.U],
-            [cs.jacobian(self.FU_DISCRETE(self.X, self.U), self.U)],
-            {"post_expand": True},
-        )
-        """Second order partial derivative of the discretized dynamics with respect to `u`"""
-        self.FUX_DISCRETE = cs.Function(
-            "FUX_DISCRETE",
-            [self.X, self.U],
-            [cs.jacobian(self.FU_DISCRETE(self.X, self.U), self.X)],
-            {"post_expand": True},
-        )
-        """Second order partial derivative of the discretized dynamics with respect to `u`"""
-        self.FXX_DISCRETE = cs.Function(
-            "FXX_DISCRETE",
-            [self.X, self.U],
-            [cs.jacobian(self.FX_DISCRETE(self.X, self.U), self.X)],
-            {"post_expand": True},
-        )
-        """Second order partial derivative of the discretized dynamics with respect to `x`"""
+        # self.FUU_DISCRETE = cs.Function(
+        #     "FUU_DISCRETE",
+        #     [self.X, self.U],
+        #     [cs.jacobian(self.FU_DISCRETE(self.X, self.U), self.U)],
+        #     {"post_expand": True},
+        # )
+        # """Second order partial derivative of the discretized dynamics with respect to `u`"""
+        # self.FUX_DISCRETE = cs.Function(
+        #     "FUX_DISCRETE",
+        #     [self.X, self.U],
+        #     [cs.jacobian(self.FU_DISCRETE(self.X, self.U), self.X)],
+        #     {"post_expand": True},
+        # )
+        # """Second order partial derivative of the discretized dynamics with respect to `u`"""
+        # self.FXX_DISCRETE = cs.Function(
+        #     "FXX_DISCRETE",
+        #     [self.X, self.U],
+        #     [cs.jacobian(self.FX_DISCRETE(self.X, self.U), self.X)],
+        #     {"post_expand": True},
+        # )
+        # """Second order partial derivative of the discretized dynamics with respect to `x`"""
 
     def running_cost(self, x, u):
         """
@@ -177,11 +176,11 @@ class Solver:
         """
         return (self.X_TERMINAL - x).T @ self.Q_RUNNING @ (self.X_TERMINAL - x) + u.T @ self.R @ u
 
-    def augmented_lagrangian_cost(self, x, u):
+    def augmented_lagrangian_cost(self, x, u, LAMBDAS, MU):
         """
         Extends the cost function to include the equaliti constraint, using an augmented lagrangian approach.
         """
-        return self.running_cost(x, u) + self.LAMBDAS.T @ self.H(x, u) + (self.MU / 2) * cs.sumsqr(self.H(x, u))
+        return self.running_cost(x, u) + LAMBDAS.T @ self.H(x, u) + (MU / 2) * cs.sumsqr(self.H(x, u))
 
     def terminal_cost(self, x):
         """
@@ -191,19 +190,19 @@ class Solver:
 
     def equality_constrained_ddp(
         self,
-        eta: float = 20.0,
-        omega: float = 20.0,
+        eta: float = 10.0,
+        omega: float = 10.0,
         beta: float = 0.5,
         alpha: float = 0.1,
         k_mu=10,
-        etha_threshold=10,
-        omega_threshold: int = 10,
+        eta_threshold=20,
+        omega_threshold: int = 20,
         max_iterations: int = 20,
         max_line_search_iters=10,
     ):
-        x = np.zeros((self.n, N_TIMESTEPS))
+        x = np.zeros((self.n, N_TIMESTEPS + 1))
         """State trajectory"""
-        u = np.ones((self.n, N_TIMESTEPS))
+        u = np.ones((self.m, N_TIMESTEPS))
         """Control sequence"""
         mu_zero = 1.0
         lambda_zero = np.zeros(self.h_dim)
@@ -213,37 +212,36 @@ class Solver:
         for timestep in range(N_TIMESTEPS):
             x[:, timestep + 1] = np.array(self.F_DISCRETE(x[:, timestep], u[:, timestep])).flatten()
             # Accumulate the running cost at each step
-            cost += self.L_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
+            cost += self.L_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)  # type: ignore
         # Adn finally we add the terminal cost at the end of the trajectory
         cost += self.L_TERMINAL(x[:, N_TIMESTEPS])  # type: ignore
 
         V = np.zeros(N_TIMESTEPS + 1)
         """Value function"""
-        VX = np.zeros((self.n, N_TIMESTEPS + 1))
-        VXX = np.zeros((self.n, self.n, N_TIMESTEPS + 1))
+        VX = np.zeros((N_TIMESTEPS + 1, self.n))
+        VXX = np.zeros((N_TIMESTEPS + 1, self.n, self.n))
 
-        k = [np.zeros((self.m, 1))] * (self.n + 1)
-        K = [np.zeros((self.m, self.n))] * (self.n + 1)
+        k = [np.zeros((self.m, 1))] * (N_TIMESTEPS + 1)
+        K = [np.zeros((self.m, self.n))] * (N_TIMESTEPS + 1)
 
         total_time = 0
 
         for iteration in range(max_iterations):
-            if eta > etha_threshold or omega > omega_threshold:
+            if eta > eta_threshold or omega > omega_threshold:
                 break
             # Backward pass:
-
             backward_pass_start_time = time.time()
             # For Equation 4, the value at the final sequence element is the terminal value
             V[self.n] = self.L_TERMINAL(x[:, self.n])
-            VX[:, self.n] = np.array(self.L_TERMINAL(x[:, self.n])).flatten()
-            VXX[:, :, self.n] = self.L_TERMINAL(x[:, self.n])
+            VX[self.n] = np.array(self.L_TERMINAL(x[:, self.n])).flatten()
+            VXX[self.n] = self.L_TERMINAL(x[:, self.n])
 
             for timestep in reversed(range(N_TIMESTEPS)):
                 fx_eval = self.FX_DISCRETE(x[:, timestep], u[:, timestep])
                 fu_eval = self.FU_DISCRETE(x[:, timestep], u[:, timestep])
-                fuu_eval = self.FUU_DISCRETE(x[:, timestep], u[:, timestep])
-                fux_eval = self.FUX_DISCRETE(x[:, timestep], u[:, timestep])
-                fxx_eval = self.FXX_DISCRETE(x[:, timestep], u[:, timestep])
+                # fuu_eval = self.FUU_DISCRETE(x[:, timestep], u[:, timestep])
+                # fux_eval = self.FUX_DISCRETE(x[:, timestep], u[:, timestep])
+                # fxx_eval = self.FXX_DISCRETE(x[:, timestep], u[:, timestep])
 
                 h_eval = self.H(x[:, timestep], u[:, timestep])
                 hx_eval = self.HX(x[:, timestep], u[:, timestep])
@@ -254,59 +252,62 @@ class Solver:
 
                 # Equation 9f
                 q = (
-                    self.L_LAGRANGIAN(x[:, timestep], u[:, timestep])
+                    self.L_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)
                     + V[timestep + 1]
                     # Constraint term
                     + lambda_zero.T @ h_eval  # type: ignore# type: ignore
-                    + (self.MU / 2) * cs.sumsqr(h_eval)  # type: ignore
+                    + (mu_zero / 2) * cs.sumsqr(h_eval)  # type: ignore
                 )
-
                 # Equation 9e
                 QU = (
-                    self.LU_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
-                    + VX[:, timestep + 1].T @ fu_eval  # type: ignore
+                    self.LU_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)  # type: ignore
+                    + VX[timestep + 1, :].reshape(1, -1) @ fu_eval  # type: ignore
                     # Augmented lagrangian term
                     + (lambda_zero + mu_zero * h_eval).T @ hu_eval  # type: ignore
                 )
 
                 # Equation 9d
                 QX = (
-                    self.LX_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
-                    + VX[:, timestep + 1].T @ fx_eval  # type: ignore
+                    self.LX_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)  # type: ignore
+                    + VX[timestep + 1, :].reshape(1, -1) @ fx_eval  # type: ignore
                     # Augmented lagrangian term
                     + (lambda_zero + mu_zero * h_eval).T @ hx_eval  # type: ignore
                 )
 
                 # Equation 9c
                 QUU = (
-                    self.LUU_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
-                    + fu_eval.T @ VXX[:, timestep + 1] @ fu_eval  # type: ignore
-                    + VX[:, timestep + 1].T @ fuu_eval  # type: ignore
+                    self.LUU_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)  # type: ignore
+                    + fu_eval.T @ VXX[timestep + 1] @ fu_eval  # type: ignore
+                    # + VX[timestep + 1, :].reshape(1, -1) @ fuu_eval  # type: ignore
                     # Augmented lagrangian term
                     + (lambda_zero + mu_zero * h_eval).T @ huu_eval  # type: ignore
                     + mu_zero * hu_eval.T @ hu_eval  # type: ignore
                 )
+
                 # Equation 9b
                 QUX = (
-                    self.LX_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
-                    + fx_eval.T @ VX[:, timestep + 1]  # type: ignore
-                    + VX[:, timestep + 1].T @ fux_eval  # type: ignore
+                    self.LUX_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)  # type: ignore
+                    + fu_eval.T @ VXX[timestep + 1] @ fx_eval  # type: ignore
+                    # + VX[timestep + 1, :].reshape(1, -1) @ fux_eval  # type: ignore
                     # Augmented lagrangian term
                     + (lambda_zero + mu_zero * h_eval).T @ hux_eval  # type: ignore
                     + mu_zero * hu_eval.T @ hx_eval  # type: ignore
                 )
                 # Equation 9a
                 QXX = (
-                    self.LXX_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
-                    + fx_eval.T @ VXX[:, timestep + 1] @ fx_eval  # type: ignore
-                    + VX[:, timestep + 1].T @ fxx_eval  # type: ignore
+                    self.LXX_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)  # type: ignore
+                    + fx_eval.T @ VXX[timestep + 1] @ fx_eval  # type: ignore
+                    # + VX[timestep + 1, :].reshape(1, -1) @ fxx_eval  # type: ignore
                     # Augmented lagrangian term
                     + (lambda_zero + mu_zero * h_eval).T @ hxx_eval  # type: ignore
                     + mu_zero * hx_eval.T @ hx_eval  # type: ignore
                 )
-
+                # print(f"{QUU.shape=}")
+                # print("QUU.ndim:", QUU.ndim)
+                # print("QUU.shape:", QUU.shape)
+                # print("QUU value:", QUU)
                 # Necessary later for computing the optimal `u*`
-                QUU_INV = np.linalg.inv(QUU)
+                QUU_INV = cs.inv(QUU)
                 k[timestep] = -QUU_INV @ QU
                 K[timestep] = -QUU_INV @ QUX
 
@@ -315,24 +316,24 @@ class Solver:
                 # Equation 11a
                 V[timestep] = q - 0.5 * np.array(cs.evalf(k[timestep].T @ QUU @ k[timestep])).flatten()[0]
                 # Equation 11b
-                VX[:, timestep] = np.array(QX - k[timestep].T @ QUU @ K[timestep]).flatten()
+                VX[timestep] = np.array(QX - k[timestep].T @ QUU @ K[timestep]).flatten()
                 # Equation 11c
-                VXX[:, :, timestep] = QXX - K[timestep].T @ QUU @ K[timestep]
+                VXX[timestep] = QXX - K[timestep].T @ QUU @ K[timestep]
             backward_pass_time = time.time() - backward_pass_start_time
             backward_pass_time = round(backward_pass_time * 1000)
             # Forward pass
             forward_pass_start_time = time.time()
             u_new = np.ones((self.m, N_TIMESTEPS))
-            x_new = np.zeros((self.n, N_TIMESTEPS))
+            x_new = np.zeros((self.n, N_TIMESTEPS + 1))
             x_new[:, 0] = x[:, 0]
 
             for line_search_iter in range(max_line_search_iters):
                 new_cost = 0
                 # We propagate the state trajectory by using the discretized dynamics.
-                for timestep in range(N_TIMESTEPS):
+                for timestep in range(N_TIMESTEPS - 1):
                     x_new[:, timestep + 1] = np.array(self.F_DISCRETE(x[:, timestep], u[:, timestep])).flatten()
                     # Accumulate the running cost at each step
-                    new_cost += self.L_LAGRANGIAN(x[:, timestep], u[:, timestep])  # type: ignore
+                    new_cost += self.L_LAGRANGIAN(x[:, timestep], u[:, timestep], lambda_zero, mu_zero)  # type: ignore
                 # Adn finally we add the terminal cost at the end of the trajectory
                 new_cost += self.L_TERMINAL(x[:, N_TIMESTEPS])  # type: ignore
 
@@ -344,11 +345,15 @@ class Solver:
                 alpha /= 2.0
             # TODO: Ask valerio where does this come from.
             if (
-                np.linalg.norm(self.LX_LAGRANGIAN(x_new[:, N_TIMESTEPS - 1], u_new[:, N_TIMESTEPS - 1]))
+                np.linalg.norm(
+                    self.LX_LAGRANGIAN(x_new[:, N_TIMESTEPS - 1], u_new[:, N_TIMESTEPS - 1], lambda_zero, mu_zero)
+                )
                 < omega  # type:ignore
             ):
                 if np.linalg.norm(self.H(x_new[:, N_TIMESTEPS - 1], u_new[:, N_TIMESTEPS - 1])) < eta:  # type:ignore
-                    lambda_zero += mu_zero * self.H(x_new[:, self.N - 1], u_new[:, N_TIMESTEPS - 1])  # type:ignore
+                    lambda_zero += mu_zero * self.H(
+                        x_new[:, N_TIMESTEPS - 1], u_new[:, N_TIMESTEPS - 1]
+                    )  # type:ignore
                     eta /= mu_zero**beta
                     omega = omega // mu_zero
                 else:
@@ -360,7 +365,7 @@ class Solver:
             total_time += backward_pass_time + forward_pass_time
             print(
                 f"{iteration=},{backward_pass_time=},{forward_pass_time=}" + "||h(x, u)||:",
-                np.linalg.norm(self.H(x[:, :-1], u)),  # type: ignore
+                np.linalg.norm(self.H(x[:, N_TIMESTEPS], u[: N_TIMESTEPS - 1]), np.inf),  # type: ignore
             )
             print("Total time: ", total_time * 1000, " ms")
             # check result
