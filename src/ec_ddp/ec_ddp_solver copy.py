@@ -3,7 +3,8 @@ import time
 import casadi as cs
 import numpy as np
 
-import ec_ddp.model as model
+# import ec_ddp.model as model
+from ec_ddp import model
 
 MODEL = model.CartPendulum()
 DELTA: float = 0.01
@@ -281,3 +282,16 @@ def equality_constrained_ddp(
             f"{iteration=},{backward_pass_time=},{forward_pass_time=}" + "||h(x, u)||:",
             np.linalg.norm(H(x[:, :-1], u)),  # type: ignore
         )
+        print("Total time: ", total_time * 1000, " ms")
+        # check result
+        x_check = np.zeros((N, N_TIMESTEPS + 1))
+        x_check[:, 0] = np.zeros(N)
+        for i in range(N_TIMESTEPS):
+            x_check[:, i + 1] = np.array(F_DISCRETE(x_check[:, i], u[:, i])).flatten()
+
+        # display
+        MODEL.animate(N, x_check, u)
+
+
+equality_constrained_ddp()
+equality_constrained_ddp()

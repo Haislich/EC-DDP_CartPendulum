@@ -1,7 +1,7 @@
 [project]
 name = "ec-ddp"
 version = "0.1.0"
-description = "Equality Constrained Differential Dynamic Programming (EC-DDP). A reimplementation of EC-DDP for trajectory optimization with equality constraints, based on the Augmented Lagrangian approach proposed by El Kazdadi et al. (ICRA 2021). "
+description = "A reimplementation of EC-DDP for trajectory optimization with equality constraints, based on the Augmented Lagrangian approach proposed by El Kazdadi et al. (ICRA 2021). "
 readme = "README.md"
 authors = [
     { name = "Valerio Belli", email = "valeriobelli26@gmail.com"},
@@ -22,6 +22,10 @@ ec-ddp = "ec_ddp.__main__:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# [tool.hatch.build.targets.wheel]
+# packages = ["ec_ddp"]
+# package-directories = { ec_ddp = "src/ec_ddp" }
 
 [dependency-groups]
 dev = [

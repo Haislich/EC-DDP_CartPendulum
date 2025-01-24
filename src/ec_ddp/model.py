@@ -1,16 +1,20 @@
 import math
 import os
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any, Callable
 
 import casadi as cs
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 from matplotlib.gridspec import GridSpec
-from typing_extensions import override
 
 
-class BaseSystem:
+# We shouldn't be able to instantiate this system
+class BaseSystem(ABC):
+    f: Callable
+
     def __init__(self, name: str, n: int, m: int, g: float = 9.81):
         r"""
         A base class for dynamic systems.
@@ -57,8 +61,6 @@ class BaseSystem:
         self.ax_small2.cla()
         self.ax_small2.axis((0, self.N_sim, -self.u_max * 1.1, self.u_max * 1.1))
         self.ax_small2.plot(u[:, :i].T)
-
-    def draw_frame(self, ax, i, x, u, alpha=1.0, x_pred=None): ...
 
     def animate(
         self,
@@ -110,6 +112,11 @@ class BaseSystem:
             ani.save(video_filename, writer=writer)
         else:
             plt.show()
+
+    @abstractmethod
+    def draw_frame(self, ax, i, x, u, alpha=1.0, x_pred=None): ...
+    @abstractmethod
+    def constraints(self, x, u) -> cs.DM | Any: ...
 
 
 @dataclass
@@ -178,7 +185,6 @@ class CartPendulum(BaseSystem):
         self.f = lambda x, u: cs.vertcat(x[2:4], self.f1(x, u), self.f2(x, u))
         """State space dynamics of the entire system."""
 
-    @override
     def draw_frame(self, ax, i, x, u, alpha=1.0, x_pred=None):
         ax.axis((-1.5, 1.5, -1.5, 1.5))
         ax.set_aspect("equal")
